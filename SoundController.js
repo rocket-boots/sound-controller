@@ -18,7 +18,21 @@ class SoundController {
 		this.music = musicListing;
 		this.stopMusic = NOOP;
 		this.stopAmbience = NOOP;
+		this.volume = 1;
+		this.isSoundsOn = true;
+		this.isMusicOn = true;
+		this.playlist = [];
+		this.playlistIndex = 0;
+		this.musicPlaying = null;
 	}
+
+	turnSoundsOn(on = true) { this.isSoundsOn = on; }
+
+	turnSoundsOff(off = true) { this.isSoundsOn = !off; }
+
+	turnMusicOn(on = true) { this.isMusicOn = on; }
+
+	turnMusicOff(off = true) { this.isMusicOn = !off; }
 
 	setupSounds(soundsListing = {}) {
 		Object.keys(soundsListing).forEach((key) => {
@@ -38,12 +52,16 @@ class SoundController {
 	}
 
 	playHowl(src, howlOptions = {}) {
+		if (!this.isSoundsOn) return NOOP;
 		const sound = this.makeHowlSound(src, howlOptions);
 		sound.play();
 		return () => sound.stop();
 	}
 
-	/** Play a sound from a function, array, object (w/ play method), or string (via Howler) */
+	/**
+	 * Play a sound from a function, array, object (w/ play method), or string (via Howler);
+	 * Meant to be an internal function
+	 */
 	playThing(soundThing, soundName, howlOptions = {}) {
 		const typeOfSound = typeof soundThing;
 		if (typeOfSound === 'function') {
@@ -70,6 +88,7 @@ class SoundController {
 	}
 
 	async play(soundName, options = {}) {
+		if (!this.isSoundsOn) return;
 		const soundThing = this.sounds[soundName];
 		if (!soundThing) {
 			if (options.warnMissing) console.warn('No sound found for', soundName);
@@ -86,6 +105,7 @@ class SoundController {
 	}
 
 	playMusic(soundName, options = {}) {
+		if (!this.isMusicOn) return NOOP;
 		const soundThing = this.music[soundName];
 		if (!soundThing) {
 			console.warn('No music found for', soundName);
@@ -93,11 +113,13 @@ class SoundController {
 		}
 		if (typeof this.stopMusic === 'function') this.stopMusic();
 		const { loop = true, volume = 0.75 } = options;
-		this.stopMusic = this.playThing(soundThing, soundName, { ...options, loop, volume });
+		const howlOptions = { ...options, loop, volume };
+		this.stopMusic = this.playThing(soundThing, soundName, howlOptions);
 		return this.stopMusic;
 	}
 
 	playAmbience(soundName, options = {}) {
+		if (!this.isSoundsOn) return NOOP;
 		const soundThing = this.music[soundName];
 		if (!soundThing) {
 			console.warn('No music found for', soundName);
@@ -105,8 +127,33 @@ class SoundController {
 		}
 		if (typeof this.stopAmbience === 'function') this.stopAmbience();
 		const { loop = true } = options;
-		this.stopAmbience = this.playThing(soundThing, soundName, { loop });
+		const howlOptions = { ...options, loop };
+		this.stopAmbience = this.playThing(soundThing, soundName, howlOptions);
 		return this.stopAmbience;
+	}
+
+	/** WIP */
+	playList(soundNames = [], options = {}, individualOptions = []) {
+		const getOptions = (i) => {
+			let opt = { ...options };
+			if (typeof individualOptions[i] === 'object') {
+				opt = { ...opt, ...individualOptions[i] };
+			}
+			return opt;
+		};
+		this.playlist = soundNames.map((soundName, i) => ({
+			soundName,
+			options: getOptions(i),
+		}));
+		this.playlistIndex = 0;
+		return this.playNext(0);
+	}
+
+	playNext(i) {
+		this.playlistIndex = (typeof i === 'number') ? i : this.playlistIndex + 1;
+		this.playlistIndex %= this.playlist.length;
+		const { soundName, options } = this.playlist[this.playlistIndex];
+		return this.playMusic(soundName, options);
 	}
 }
 
