@@ -1,8 +1,6 @@
 import { Howl, Howler } from 'howler';
 import { Random } from 'rocket-utility-belt';
 
-const NOOP = () => {};
-
 class SoundController {
 	/**
 	 * @param {*} soundsListing - an object containing keys of sound names and values of
@@ -16,8 +14,8 @@ class SoundController {
 		this.sounds = {};
 		this.setupSounds(soundsListing);
 		this.music = musicListing;
-		this.stopMusic = NOOP;
-		this.stopAmbience = NOOP;
+		this.musicNowPlaying = null;
+		this.ambienceNowPlaying = null;
 		this.volume = 1;
 		this.isSoundsOn = true;
 		this.isMusicOn = true;
@@ -26,13 +24,39 @@ class SoundController {
 		this.musicPlaying = null;
 	}
 
-	turnSoundsOn(on = true) { this.isSoundsOn = on; }
+	stopMusic() {
+		if (!this.musicNowPlaying) return;
+		if (typeof this.musicNowPlaying.stop !== 'function') {
+			throw new Error('Could not stop music playing');
+		}
+		this.musicNowPlaying.stop();
+	}
 
-	turnSoundsOff(off = true) { this.isSoundsOn = !off; }
+	stopAmbience() {
+		if (!this.ambienceNowPlaying) return;
+		if (typeof this.ambienceNowPlaying.stop !== 'function') {
+			throw new Error('Could not stop music playing');
+		}
+		this.ambienceNowPlaying.stop();
+	}
 
-	turnMusicOn(on = true) { this.isMusicOn = on; }
+	turnSoundsOn(on = true) {
+		this.isSoundsOn = on;
+		if (!this.isSoundsOn) {
+			this.stopAmbience();
+		}
+	}
 
-	turnMusicOff(off = true) { this.isMusicOn = !off; }
+	turnSoundsOff(off = true) { this.turnSoundsOn(!off); }
+
+	turnMusicOn(on = true) {
+		this.isMusicOn = on;
+		if (!this.isMusicOn) {
+			this.stopMusic();
+		}
+	}
+
+	turnMusicOff(off = true) { this.turnMusicOn(!off); }
 
 	setupSounds(soundsListing = {}) {
 		Object.keys(soundsListing).forEach((key) => {
@@ -52,10 +76,10 @@ class SoundController {
 	}
 
 	playHowl(src, howlOptions = {}) {
-		if (!this.isSoundsOn) return NOOP;
+		if (!this.isSoundsOn) return null;
 		const sound = this.makeHowlSound(src, howlOptions);
 		sound.play();
-		return () => sound.stop();
+		return sound;
 	}
 
 	/**
@@ -78,7 +102,7 @@ class SoundController {
 		if (typeOfSound === 'string') {
 			return this.playHowl(soundThing, howlOptions);
 		}
-		return NOOP;
+		return null;
 	}
 
 	static wait(delayMs) {
@@ -105,31 +129,39 @@ class SoundController {
 	}
 
 	playMusic(soundName, options = {}) {
-		if (!this.isMusicOn) return NOOP;
+		if (!this.isMusicOn) return null;
 		const soundThing = this.music[soundName];
 		if (!soundThing) {
 			console.warn('No music found for', soundName);
-			return NOOP;
+			return null;
 		}
-		if (typeof this.stopMusic === 'function') this.stopMusic();
+		try {
+			this.stopMusic();
+		} catch (err) {
+			console.warn(err);
+		}
 		const { loop = true, volume = 0.75 } = options;
 		const howlOptions = { ...options, loop, volume };
-		this.stopMusic = this.playThing(soundThing, soundName, howlOptions);
-		return this.stopMusic;
+		this.musicNowPlaying = this.playThing(soundThing, soundName, howlOptions);
+		return this.musicNowPlaying;
 	}
 
 	playAmbience(soundName, options = {}) {
-		if (!this.isSoundsOn) return NOOP;
+		if (!this.isSoundsOn) return null;
 		const soundThing = this.music[soundName];
 		if (!soundThing) {
 			console.warn('No music found for', soundName);
-			return NOOP;
+			return null;
 		}
-		if (typeof this.stopAmbience === 'function') this.stopAmbience();
+		try {
+			this.stopAmbience();
+		} catch (err) {
+			console.warn(err);
+		}
 		const { loop = true } = options;
 		const howlOptions = { ...options, loop };
-		this.stopAmbience = this.playThing(soundThing, soundName, howlOptions);
-		return this.stopAmbience;
+		this.ambienceNowPlaying = this.playThing(soundThing, soundName, howlOptions);
+		return this.ambienceNowPlaying;
 	}
 
 	/** WIP */
